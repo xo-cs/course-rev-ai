@@ -12,7 +12,12 @@ export const metadata: Metadata = {
   description: "Course reviews for Woosong University students, with Broddy, an AI course buddy.",
 };
 
-export const viewport: Viewport = { themeColor: "#ffffff" };
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover", // enables env(safe-area-inset-*) on notched phones
+  themeColor: "#ffffff",
+};
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

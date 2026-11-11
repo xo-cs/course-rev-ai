@@ -31,7 +31,7 @@ export function LeftNav() {
         <button
           type="button"
           onClick={() => uiStore.set((s) => ({ ...s, navCollapsed: !s.navCollapsed }))}
-          className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-black"
+          className="flex size-11 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-black"
           aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
           aria-expanded={!collapsed}
         >

@@ -1,7 +1,10 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { BroddyAvatar, IconPanelRight } from "@/components/ui/Icons";
+import { useSwipeDown } from "@/components/ui/useSwipeDown";
+import { toastStore } from "@/lib/toast";
 import { BroddyPanel } from "./BroddyPanel";
 import { LeftNav } from "./LeftNav";
 import { MobileTabBar } from "./MobileTabBar";
@@ -13,13 +16,14 @@ export function AppShell({ children, programs }: { children: ReactNode; programs
   const ui = uiStore.useValue();
   const [profileOpen, setProfileOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const closeSheet = useCallback(() => setSheetOpen(false), []);
 
   const api = useMemo<ShellApi>(
     () => ({
       openProfile: () => setProfileOpen(true),
       openBroddy: () => {
         uiStore.set((s) => ({ ...s, broddyCollapsed: false }));
-        if (window.matchMedia("(max-width: 1023px)").matches) setSheetOpen(true);
+        if (window.matchMedia("(max-width: 1023.98px)").matches) setSheetOpen(true);
       },
     }),
     [],
@@ -30,7 +34,10 @@ export function AppShell({ children, programs }: { children: ReactNode; programs
       <div className="flex h-dvh overflow-hidden">
         <LeftNav />
 
-        <main id="main" className="min-w-0 flex-1 overflow-y-auto pb-24 md:pb-20 lg:pb-0">
+        <main
+          id="main"
+          className="scroll-stable min-w-0 flex-1 overflow-y-auto overflow-x-hidden pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-24 lg:pb-0"
+        >
           {children}
         </main>
 
@@ -40,7 +47,7 @@ export function AppShell({ children, programs }: { children: ReactNode; programs
             <button
               type="button"
               onClick={() => uiStore.set((s) => ({ ...s, broddyCollapsed: false }))}
-              className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-black"
+              className="flex size-11 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-black"
               aria-label="Open Broddy"
             >
               <IconPanelRight />
@@ -63,25 +70,61 @@ export function AppShell({ children, programs }: { children: ReactNode; programs
 
       <MobileTabBar />
 
-      {/* Mobile / tablet: floating button + full screen sheet */}
+      {/* Phones / tablets: floating button + full screen sheet */}
       {!sheetOpen && (
         <button
           type="button"
           onClick={() => setSheetOpen(true)}
-          className="fixed bottom-20 right-4 z-30 flex items-center gap-2 rounded-full bg-black py-2 pl-2 pr-4 text-sm font-medium text-white shadow-lg md:bottom-6 lg:hidden"
+          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-30 flex size-14 items-center justify-center gap-2 rounded-full bg-black text-sm font-medium text-white shadow-lg transition-transform active:scale-95 sm:h-12 sm:w-auto sm:pl-2 sm:pr-4 md:bottom-6 lg:hidden"
           aria-label="Open Broddy chat"
         >
-          <BroddyAvatar size={32} className="border border-white/40" />
-          Ask Broddy
+          <BroddyAvatar size={34} className="border border-white/40" />
+          <span className="hidden sm:inline">Ask Broddy</span>
         </button>
       )}
-      {sheetOpen && (
-        <div className="fixed inset-0 z-40 animate-sheet-up lg:hidden" role="dialog" aria-modal="true" aria-label="Broddy chat">
-          <BroddyPanel variant="sheet" onCollapse={() => setSheetOpen(false)} />
-        </div>
-      )}
+      {sheetOpen && <BroddySheet onClose={closeSheet} />}
 
+      <Toaster />
       <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} programs={programs} />
     </ShellContext.Provider>
+  );
+}
+
+function BroddySheet({ onClose }: { onClose: () => void }) {
+  const { panelRef, handleProps } = useSwipeDown<HTMLDivElement>(onClose);
+  return (
+    <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Broddy chat">
+      <div className="absolute inset-0 animate-fade-in bg-black/40" aria-hidden />
+      <div
+        ref={panelRef}
+        className="absolute inset-0 animate-sheet-up overflow-hidden bg-white pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+      >
+        <BroddyPanel variant="sheet" onCollapse={onClose} dragHandleProps={handleProps} />
+      </div>
+    </div>
+  );
+}
+
+function Toaster() {
+  const toast = toastStore.useValue();
+  return (
+    <div
+      aria-live="polite"
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(8.5rem+env(safe-area-inset-bottom))] z-50 flex justify-center px-4 md:bottom-24 lg:bottom-6"
+    >
+      {toast && (
+        <div
+          key={toast.id}
+          className="pointer-events-auto flex max-w-md animate-fade-up items-center gap-4 rounded-full bg-black py-3 pl-5 pr-3 text-sm text-white shadow-xl"
+        >
+          <span>{toast.text}</span>
+          {toast.href && (
+            <Link href={toast.href} className="flex h-8 items-center rounded-full bg-white px-3 font-medium text-black">
+              {toast.linkText}
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

@@ -20,8 +20,10 @@ A hand drawn sketch of the layout is in `design/sketch.jpg`. Look at it before b
   ```
   GEMINI_API_KEY=
   GEMINI_MODEL=
+  GEMINI_FALLBACK_MODELS=
   GROQ_API_KEY=
   GROQ_MODEL=
+  ADMIN_PASSCODE=
   ```
   The API key must never reach the browser.
 
@@ -197,6 +199,27 @@ The student uploads a screenshot of the credits page from the university info sy
 ### `/api/summarize` and `/api/extract-credits`
 As described above. Use structured JSON output for both.
 
+## Section 4: Admin dashboard `/admin`
+
+An admin view for the university to see how courses are doing.
+
+* **Access**: `/admin` shows a simple passcode screen. `ADMIN_PASSCODE` (in `.env.local`) is checked on the server and a session is stored in an httpOnly cookie. This is for the demo only, not real security; the README must say so.
+* A small **Admin** link at the bottom of the left nav.
+* **Filters** at the top that apply to every chart: program (department), target year, course type, semester, and "include sample reviews".
+* **Charts** (Recharts, black and gray only, readable on a projector):
+  1. KPI cards: total reviews, average quality, average difficulty, percent would take again, number of courses with no reviews.
+  2. Histogram: how many courses fall in each quality range (1 to 5).
+  3. Bar chart: average quality per program, sorted, with review counts.
+  4. Scatter plot: difficulty (x) vs quality (y), one dot per course, dot size = review count, hover shows the course name.
+  5. Line chart: number of reviews per semester.
+  6. Bar chart: most common review tags, split into positive and negative.
+  7. "Needs attention" table: courses with the lowest quality or quality dropping, with review count, top complaint tags and a link to the course.
+  8. Top rated courses table.
+  9. Professor table: professor, courses taught, average quality, reviews.
+* **AI insights** card with a "Generate report" button. It sends the stats for the current filter plus the reviews of the 5 weakest courses to `lib/llm.ts` and returns: 3 key findings, the main complaints per weak course, and 3 suggested actions for the university. Cite numbers. Cache per filter combination.
+* **Export** button: download the current filtered stats as CSV.
+* A note on the page: reviews written by users are stored per browser for this demo, so the dashboard shows sample reviews plus reviews from this browser.
+
 ## Design
 
 * Monochrome black and white only (no accent colors), clean typography (one good sans serif), generous whitespace, thin 1px borders, high contrast. Quality boxes, bars and calendar blocks in black and grays. It should look sharp on a projector.
@@ -206,10 +229,11 @@ As described above. Use structured JSON output for both.
 ## Phases (stop after each one and tell me how to test)
 
 1. Scaffold Next.js + Tailwind, the three column shell (left nav, main, an empty Broddy panel), load `data/courses.json`, generate `data/reviews.json`, build the **Reviews** list with search, filters and sort.
-2. Course detail page: header, sections table, comments, review form, `reviewsStore` and `myCoursesStore`, Add to My Courses.
+2. Course detail page: header, sections table, comments, review form, `reviewsStore` and `myCoursesStore`, Add to My Courses. Mobile pass (320 to 430px, safe areas, filters sheet) and list performance.
 3. **Broddy**: iMessage style UI, `/api/chat` with streaming, profile, context chip, suggestion chips, token validation, course chips and Add buttons. Then the AI review summary card. (This is the core of the AI demo; make it solid before moving on.)
 4. **My Courses** and **Calendar** with `lib/schedule.ts`, clash display and preview ghost blocks.
-5. Screenshot upload and confirm step, Graduation progress card, loading and empty states, error handling, `npm run build` passes, README, then help me deploy to Vercel (env vars set in the Vercel dashboard).
+5. **Admin dashboard** (`/admin`, see Section 4).
+6. Screenshot upload and confirm step, Graduation progress card, loading and empty states, error handling, `npm run build` passes, README, then help me deploy to Vercel (env vars set in the Vercel dashboard).
 
 ## Demo questions to test with
 

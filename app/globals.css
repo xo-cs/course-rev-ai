@@ -18,6 +18,11 @@ body {
 }
 
 body {
+  /* Landscape notches: keep content out of the side insets. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  overflow: hidden;
+  overscroll-behavior: none;
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -31,6 +36,32 @@ body {
 ::selection {
   background: #000;
   color: #fff;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Keep the scrollbar slot reserved so filtering never shifts the layout sideways. */
+.scroll-stable {
+  scrollbar-gutter: stable;
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-fade-in {
+  animation: fade-in 160ms ease-out both;
 }
 
 dialog::backdrop {
@@ -56,10 +87,10 @@ dialog::backdrop {
   }
 }
 .animate-fade-up {
-  animation: fade-up 180ms ease-out both;
+  animation: fade-up 180ms ease-out backwards;
 }
 .animate-sheet-up {
-  animation: sheet-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: sheet-up 240ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
