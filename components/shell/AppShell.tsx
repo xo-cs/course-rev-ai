@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { BroddyAvatar, IconPanelRight } from "@/components/ui/Icons";
 import { useSwipeDown } from "@/components/ui/useSwipeDown";
+import { broddyFocusStore } from "@/lib/pageContext";
 import { toastStore } from "@/lib/toast";
+import { usePathname } from "next/navigation";
 import { BroddyPanel } from "./BroddyPanel";
 import { LeftNav } from "./LeftNav";
 import { MobileTabBar } from "./MobileTabBar";
@@ -18,12 +20,22 @@ export function AppShell({ children, programs }: { children: ReactNode; programs
   const [sheetOpen, setSheetOpen] = useState(false);
   const closeSheet = useCallback(() => setSheetOpen(false), []);
 
+  // Close the phone sheet when the student follows a link from Broddy (e.g. a course chip).
+  const pathname = usePathname();
+  const [lastPath, setLastPath] = useState(pathname);
+  if (pathname !== lastPath) {
+    setLastPath(pathname);
+    if (sheetOpen) setSheetOpen(false);
+  }
+
   const api = useMemo<ShellApi>(
     () => ({
       openProfile: () => setProfileOpen(true),
       openBroddy: () => {
         uiStore.set((s) => ({ ...s, broddyCollapsed: false }));
         if (window.matchMedia("(max-width: 1023.98px)").matches) setSheetOpen(true);
+        // Let the panel render, then focus the input.
+        requestAnimationFrame(() => broddyFocusStore.set((n) => n + 1));
       },
     }),
     [],

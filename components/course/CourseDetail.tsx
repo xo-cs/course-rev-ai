@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/reviews/CourseRow";
 import { QualityBox } from "@/components/reviews/QualityBox";
 import { useShell } from "@/components/shell/ShellContext";
 import { BroddyAvatar, IconChevronDown, IconChevronLeft } from "@/components/ui/Icons";
-import { broddyContextStore } from "@/lib/broddyStore";
+import { dismissedContextStore, pageCourseStore } from "@/lib/pageContext";
+import { AiSummaryCard } from "./AiSummaryCard";
+import { moderateViaApi } from "./moderate";
 import { formatCredits, formatYears } from "@/lib/courseUtils";
 import { initials, reviewerLabel, reviewerMeta, takenLine } from "@/lib/reviewDisplay";
 import { reviewsStore } from "@/lib/reviewsStore";
@@ -79,8 +81,14 @@ export function CourseDetail({
     return [...m.entries()];
   }, [course.sections]);
 
+  // Tell Broddy which course this page is about (context chip), while mounted.
+  useEffect(() => {
+    pageCourseStore.set({ courseId: course.id, label: course.name });
+    return () => pageCourseStore.set(null);
+  }, [course.id, course.name]);
+
   function askBroddy() {
-    broddyContextStore.set({ kind: "course", courseId: course.id, label: course.name });
+    dismissedContextStore.set(null); // re-attach the course if the chip was removed
     openBroddy();
   }
 
@@ -219,7 +227,7 @@ export function CourseDetail({
         </div>
       )}
 
-      {summary}
+      {summary ?? <AiSummaryCard courseId={course.id} hasReviews={stats.n > 0} userReviews={userReviews.filter((r) => r.courseId === course.id)} />}
 
       {/* Sections */}
       <section className="mt-10" aria-labelledby="sections-h">
@@ -235,6 +243,7 @@ export function CourseDetail({
       <ReviewFormModal
         course={{ id: course.id, name: course.name, sections: course.sections }}
         programs={programs}
+        moderate={moderateViaApi}
         open={formOpen}
         onClose={() => setFormOpen(false)}
       />
