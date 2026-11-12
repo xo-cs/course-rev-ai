@@ -331,3 +331,40 @@ function outputText(res: unknown): string {
     .map((c) => c.text ?? "")
     .join("");
 }
+
+/**
+ * Structured JSON from an image + prompt. Gemini only (Groq is never used for images).
+ * Throws LlmUnavailableError if every Gemini model fails.
+ */
+export async function generateJsonFromImage<T>(call: {
+  label: string;
+  system: string;
+  prompt: string;
+  image: { base64: string; mimeType: string };
+  schema: Record<string, unknown>;
+}): Promise<{ data: T; model: string }> {
+  try {
+    const { value, model } = await withGemini(call.label, async (ai, model, timeoutMs, level) => {
+      const res = await ai.interactions.create(
+        {
+          model,
+          input: [
+            { type: "text", text: call.prompt },
+            { type: "image", data: call.image.base64, mime_type: call.image.mimeType },
+          ],
+          system_instruction: call.system,
+          generation_config: { thinking_level: level },
+          response_mime_type: "application/json",
+          response_format: { type: "text", mime_type: "application/json", schema: call.schema },
+        },
+        { retries: { strategy: "none" }, timeout_ms: Math.max(timeoutMs, 25_000) },
+      );
+      return JSON.parse(outputText(res)) as T;
+    });
+    console.info(`[llm] ${call.label}: answered by gemini/${model}`);
+    return { data: value, model };
+  } catch (e) {
+    console.error(`[llm] ${call.label}: all Gemini models failed: ${short(e)}`);
+    throw new LlmUnavailableError();
+  }
+}

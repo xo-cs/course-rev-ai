@@ -10,3 +10,6 @@ export const dismissedContextStore = createMemoryStore<string | null>(null);
 
 /** Incremented to ask the Broddy input to take focus. */
 export const broddyFocusStore = createMemoryStore(0);
+
+/** Incremented to ask Broddy to open the credits-upload card (e.g. from My Courses). */
+export const uploadRequestStore = createMemoryStore(0);

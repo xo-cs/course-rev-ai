@@ -7,6 +7,8 @@ import { createMemoryStore } from "./memoryStore";
 import { myCoursesStore } from "./myCoursesStore";
 import { profileStore } from "./profileStore";
 import { reviewsStore } from "./reviewsStore";
+import type { CreditCategory } from "./credits";
+import { ImageCheckError, prepareScreenshot } from "./imageUtils";
 import type { ChatEvent, RefCourse, RefSection } from "./tokens";
 
 export interface ChatMessage {
@@ -18,6 +20,10 @@ export interface ChatMessage {
   secs?: Record<string, RefSection>;
   via?: string;
   error?: boolean;
+  /** Thumbnail (data URL) of an uploaded screenshot, shown in the student's bubble. */
+  image?: string;
+  /** Extracted credits table, edited and confirmed in the bubble. */
+  credits?: { categories: CreditCategory[]; status: "draft" | "saved" | "discarded" };
 }
 
 export interface PendingReply {
@@ -39,6 +45,48 @@ const MAX_STORED = 80;
 export const chatStore = {
   useMessages: () => history.useValue(),
   usePending: () => pending.useValue(),
+
+  /** Add a message without calling the chat API (local Broddy replies). */
+  say(text: string, extra: Partial<ChatMessage> = {}) {
+    history.set((h) => [...h, { id: uid(), role: "assistant" as const, text, at: Date.now(), ...extra }].slice(-MAX_STORED));
+  },
+
+  updateMessage(id: string, patch: Partial<ChatMessage>) {
+    history.set((h) => h.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  },
+
+  /** Credits screenshot -> /api/extract-credits -> editable table bubble. */
+  async uploadCredits(file: File) {
+    if (pending.get()) return;
+    let prepared: Awaited<ReturnType<typeof prepareScreenshot>>;
+    try {
+      prepared = await prepareScreenshot(file);
+    } catch (e) {
+      chatStore.say(e instanceof ImageCheckError ? e.message : "I couldn't open that image. Try another screenshot.", { error: true });
+      return;
+    }
+    history.set((h) =>
+      [...h, { id: uid(), role: "user" as const, text: "Here's my credits screenshot.", image: prepared.thumb, at: Date.now() }].slice(-MAX_STORED),
+    );
+    pending.set({ text: "", refs: {}, secs: {} });
+    try {
+      const form = new FormData();
+      form.append("image", prepared.upload, "credits.jpg");
+      const res = await fetch("/api/extract-credits", { method: "POST", body: form });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string; categories?: CreditCategory[] };
+      pending.set(null);
+      if (json.ok && json.categories?.length) {
+        chatStore.say("Here's what I read from your screenshot. Check the numbers, fix anything I got wrong, then confirm and I'll save it to your profile.", {
+          credits: { categories: json.categories, status: "draft" },
+        });
+      } else {
+        chatStore.say(json.message || "I couldn't read images right now. Please try the upload again in a minute.", { error: true });
+      }
+    } catch {
+      pending.set(null);
+      chatStore.say("The upload didn't go through. Check your connection and try again in a minute.", { error: true });
+    }
+  },
 
   newChat() {
     controller?.abort();

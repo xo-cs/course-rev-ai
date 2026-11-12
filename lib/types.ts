@@ -98,4 +98,6 @@ export interface Profile {
   name: string | null;
   program: string | null;
   year: number | null;
+  /** Graduation credits confirmed from a screenshot (Phase 6). */
+  credits?: import("./credits").CreditsProgress | null;
 }

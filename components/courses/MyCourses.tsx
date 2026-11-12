@@ -15,6 +15,7 @@ import { reviewsStore } from "@/lib/reviewsStore";
 import { clashesWith, findAllClashes } from "@/lib/schedule";
 import { showToast } from "@/lib/toast";
 import { ClashBanner } from "@/components/calendar/ClashBanner";
+import { GraduationCard } from "./GraduationCard";
 
 export function MyCourses({ index, programs }: { index: Record<string, CourseSections>; programs: string[] }) {
   const mine = myCoursesStore.useAll();
@@ -64,13 +65,16 @@ export function MyCourses({ index, programs }: { index: Record<string, CourseSec
       </header>
 
       {mine.length === 0 ? (
-        <div className="mt-8 rounded-2xl border border-dashed border-neutral-300 px-6 py-16 text-center">
+        <>
+        <GraduationCard mine={mine} index={index} />
+        <div className="mt-6 rounded-2xl border border-dashed border-neutral-300 px-6 py-16 text-center">
           <p className="text-lg font-semibold">No courses yet.</p>
           <p className="mt-1 text-[15px] text-neutral-600">Browse reviews to find some.</p>
           <Link href="/reviews" className="mt-5 inline-flex h-11 items-center rounded-full bg-black px-5 text-sm font-semibold text-white">
             Browse reviews
           </Link>
         </div>
+        </>
       ) : (
         <>
           {/* Credits counter */}
@@ -94,6 +98,8 @@ export function MyCourses({ index, programs }: { index: Record<string, CourseSec
           </section>
 
           <ClashBanner clashes={clashes} className="mt-4" />
+
+          <GraduationCard mine={mine} index={index} />
 
           <ul className="mt-6 divide-y divide-neutral-200 border-y border-neutral-200">
             {mine.map((c) => {

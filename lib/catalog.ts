@@ -45,6 +45,7 @@ export function toListItem(c: Course): CourseListItem {
 export interface CourseSections {
   name: string;
   credits: number | null;
+  typeGroup: import("./types").TypeGroup;
   sections: { section: string; professor: string; room: string; schedule_text: string; slots: Course["sections"][number]["slots"]; remark: string }[];
 }
 
@@ -56,6 +57,7 @@ export function sectionIndex(): Record<string, CourseSections> {
       {
         name: c.name,
         credits: c.credits,
+        typeGroup: typeGroup(c.type),
         sections: c.sections.map((s) => ({ section: s.section, professor: s.professor, room: s.room, schedule_text: s.schedule_text, slots: s.slots, remark: s.remark })),
       },
     ]),

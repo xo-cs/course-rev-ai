@@ -4,7 +4,8 @@ import "server-only";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { courses, getCourse, getSeedReviews, seedReviews } from "./catalog";
-import { formatYears } from "./courseUtils";
+import { formatYears, typeGroup } from "./courseUtils";
+import { categoryFor, remainingOf, totals as creditTotals } from "./credits";
 import { publicReview, reviewerMeta, takenLine } from "./reviewDisplay";
 import { clashesWith, describeClash, findAllClashes, type Scheduled } from "./schedule";
 import { addReview, emptyTotals, totalsByCourse } from "./stats";
@@ -42,13 +43,20 @@ function totalsWith(userReviews: Review[]) {
 
 const f1 = (sum: number, n: number) => (n ? (sum / n).toFixed(1) : "-");
 
-function sectionLine(c: Course) {
+/** Section list; each section is marked with the app's clash check against My Courses. */
+function sectionLine(c: Course, mine: Scheduled[]) {
   return c.sections
-    .map((s) => `${s.section} ${s.slots.length ? s.slots.map((x) => `${x.day} ${x.start}-${x.end}`).join("+") : "TBA"}${s.remark ? ` [${s.remark}]` : ""}`)
+    .map((s) => {
+      const inPlan = mine.some((m) => m.courseId === c.id && m.section === s.section);
+      const cl = inPlan ? [] : clashesWith({ courseId: c.id, name: c.name, section: s.section, slots: s.slots }, mine);
+      const when = s.slots.length ? s.slots.map((x) => `${x.day} ${x.start}-${x.end}`).join("+") : "TBA";
+      const mark = inPlan ? " IN-PLAN" : cl.length ? ` CLASHES-WITH:${[...new Set(cl.map((x) => x.b.name))].join("/")}` : "";
+      return `${s.section} ${when}${mark}${s.remark ? ` [${s.remark}]` : ""}`;
+    })
     .join("; ");
 }
 
-function catalogLine(c: Course, t?: StatTotals) {
+function catalogLine(c: Course, t: StatTotals | undefined, mine: Scheduled[]) {
   const stats = t?.n ? `Q${f1(t.q, t.n)} D${f1(t.d, t.n)} W${f1(t.w, t.n)} n${t.n}` : "no reviews";
   return [
     c.id,
@@ -60,7 +68,7 @@ function catalogLine(c: Course, t?: StatTotals) {
     c.type || "type ?",
     c.taught_in_korean ? "taught in Korean" : null,
     stats,
-    `sections: ${sectionLine(c)}`,
+    `sections: ${sectionLine(c, mine)}`,
   ]
     .filter(Boolean)
     .join(" | ");
@@ -146,12 +154,33 @@ export function buildSystemPrompt(input: ChatContextInput) {
     }
   }
 
-  const profileText = [
-    `name: ${p.name || "not given"}`,
-    `program/major: ${p.program || "not set"}`,
-    `year: ${p.year ?? "not set"}`,
-    p.remainingCredits != null ? `remaining credits to graduate: ${p.remainingCredits}` : "graduation progress: not uploaded",
-  ].join("; ");
+  const profileText = [`name: ${p.name || "not given"}`, `program/major: ${p.program || "not set"}`, `year: ${p.year ?? "not set"}`].join("; ");
+
+  // Graduation progress confirmed by the student (from their credits screenshot).
+  let progressText = "Not provided. If the student asks about graduation requirements, suggest uploading their credits screenshot with the + button.";
+  const cats = p.credits?.categories ?? [];
+  if (cats.length) {
+    const planned = cats.map(() => 0);
+    const unmapped: string[] = [];
+    for (const m of mine) {
+      const c = getCourse(m.courseId);
+      const idx = categoryFor(c ? typeGroup(c.type) : undefined, cats);
+      if (idx >= 0) planned[idx] += m.credits ?? 0;
+      else unmapped.push(m.name);
+    }
+    const t = creditTotals(cats);
+    progressText = [
+      ...cats.map(
+        (c, i) =>
+          `- ${c.name}: required ${c.required}, earned ${c.earned}, remaining ${remainingOf(c)}${planned[i] ? `; this semester's plan adds ~${planned[i]} → ${Math.max(0, remainingOf(c) - planned[i])} left after it` : ""}`,
+      ),
+      `- TOTAL: required ${t.required}, earned ${t.earned}, remaining ${t.remaining}`,
+      unmapped.length ? `- Planned courses not matched to a category: ${unmapped.join(", ")}` : "",
+      "Category matching is approximate (by course type: GE → general education, Basic/Core/Advanced/Focus → the matching major category). Say so if it matters.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
 
   const page = { reviews: "the course reviews list", course: "a course page", courses: "their My Courses plan", calendar: "their weekly calendar", other: "the app" }[input.page];
 
@@ -165,7 +194,7 @@ GROUNDING (very important)
 - Answer ONLY from the data below (catalog, reviews, registration notes, the student's plan). If something is not in the data (for example a graduation rule you were not given, or a course that is not in the catalog), say so plainly instead of guessing.
 - Many reviews are sample reviews written for this demo. Base opinions on them anyway, but cite numbers ("4.2/5 from 6 reviews").
 - Respect section remarks (e.g. "2025 Freshman ONLY", "International only", "Korean Section", track-only). If the student does not meet one, say so clearly.
-- Never compute timetable clashes yourself. Use only the CLASH REPORT and PRECOMPUTED CLASH CHECKS below. If a section clashes, say which course and when, and suggest a non-clashing section of the same course if one exists.
+- Never compute timetable clashes yourself. Use only the CLASH REPORT, the PRECOMPUTED CLASH CHECKS and the CLASHES-WITH / IN-PLAN marks on catalog sections (computed by the app against My Courses). Never offer an [[add:...]] for a section marked CLASHES-WITH unless you clearly warn about the clash; prefer a non-clashing section. If a section clashes, say which course and when, and suggest a non-clashing section of the same course if one exists.
 
 COURSE MENTIONS AND ACTIONS (the app renders these)
 - Whenever you mention a catalog course, write ONLY its token [[course-id]] instead of the name (the app shows it as a chip with the name). Example: "I'd look at [[ai-computer-vision]]", not "Computer Vision [[ai-computer-vision]]". Use the exact id from the catalog.
@@ -181,6 +210,10 @@ If the profile is missing major or year, ask for it briefly (one line) and still
 THE STUDENT
 - ${profileText}
 - Currently viewing: ${page}
+
+GRADUATION PROGRESS (confirmed by the student from their credits screenshot)
+${progressText}
+When this is available, use it in advice: name the categories with credits left (e.g. "you still need 9 Major Core credits"), suggest courses whose type fits those categories, and say how many credits they would cover.
 
 MY COURSES (current plan, ${mine.length} courses, ${totalCredits} credits)
 ${mine.length ? mine.map((m) => `- ${m.name} [${m.courseId}] section ${m.section}: ${m.slots.map((s) => `${s.day} ${s.start}-${s.end}`).join(", ") || "TBA"} (${m.credits ?? "?"} cr)`).join("\n") : "- (empty)"}
@@ -198,6 +231,6 @@ REGISTRATION NOTES (from the Spring 2025 'READ THIS' sheet; dates may have chang
 ${registrationNotes()}
 
 CATALOG (Spring 2025 timetable; one course per line: id | name | program | [track] | years | credits | type | [language] | review stats Q=quality D=difficulty W=workload n=count | sections with day/time and [remarks])
-${ordered.map((c) => catalogLine(c, totals[c.id])).join("\n")}
+${ordered.map((c) => catalogLine(c, totals[c.id], mine)).join("\n")}
 `;
 }

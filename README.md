@@ -6,7 +6,12 @@ Course reviews for Woosong University students, plus **Broddy**, an AI course bu
 - **Broddy**: chat panel that knows the catalog, reviews, registration notes and your plan. Course mentions are verified against the catalog; it can add sections to My Courses and warns about timetable clashes.
 - **My Courses / Calendar**: semester plan, credits counter, week calendar with clash display and preview blocks.
 - **Admin dashboard** (`/admin`): charts, needs-attention list, professor table, AI insights, review moderation, CSV export.
+- **Credits screenshot**: the "+" in Broddy reads a graduation-credits screenshot (Gemini image input), shows an editable table to confirm, then powers the Graduation progress card in My Courses and Broddy's advice.
 - **/qr**: full-screen QR code of the site for the projector.
+
+### Demo credits screenshot
+
+`public/demo/credits-screenshot.png` is a made-up credits page (no real student data). In Broddy, click **+** and then **Try the demo screenshot**, or download it from `/demo/credits-screenshot.png` and upload it with **Choose image**.
 
 > Sample data: every seed review is fictional and marked "Sample review". Course data comes from the Spring 2025 international HUB timetable.
 

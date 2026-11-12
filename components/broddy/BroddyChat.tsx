@@ -5,7 +5,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
 import { useShell } from "@/components/shell/ShellContext";
 import { BroddyAvatar, IconArrowUp, IconClose, IconPlus } from "@/components/ui/Icons";
 import { chatStore, type ChatMessage, type ChatPage, type PendingReply } from "@/lib/chatStore";
-import { broddyFocusStore, dismissedContextStore, pageCourseStore } from "@/lib/pageContext";
+import { broddyFocusStore, dismissedContextStore, pageCourseStore, uploadRequestStore } from "@/lib/pageContext";
+import { CreditsEditor } from "./CreditsEditor";
 import { profileStore } from "@/lib/profileStore";
 import { MessageContent } from "./MessageContent";
 
@@ -50,6 +51,20 @@ export function BroddyChat() {
   const focusTick = broddyFocusStore.useValue();
   const { openProfile } = useShell();
   const [draft, setDraft] = useState("");
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const uploadTick = uploadRequestStore.useValue();
+  const [seenUploadTick, setSeenUploadTick] = useState(uploadTick);
+  if (uploadTick !== seenUploadTick) {
+    setSeenUploadTick(uploadTick);
+    setUploadOpen(true);
+  }
+
+  async function useDemoScreenshot() {
+    setUploadOpen(false);
+    const blob = await fetch("/demo/credits-screenshot.png").then((r) => r.blob());
+    void chatStore.uploadCredits(new File([blob], "credits-screenshot.png", { type: blob.type || "image/png" }));
+  }
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -159,7 +174,12 @@ export function BroddyChat() {
               {g.items.map((m, i) => (
                 <div key={m.id}>
                   <Bubble role={m.role} last={i === g.items.length - 1}>
+                    {m.image && (
+                      // eslint-disable-next-line @next/next/no-img-element -- local data URL thumbnail
+                      <img src={m.image} alt="Uploaded credits screenshot" className="-mx-1.5 -mt-0.5 mb-1.5 max-h-48 w-auto max-w-[calc(100%+0.75rem)] rounded-xl bg-white object-contain" />
+                    )}
                     {m.role === "assistant" ? <MessageContent text={m.text} refs={m.refs ?? {}} secs={m.secs ?? {}} /> : <p className="whitespace-pre-wrap">{m.text}</p>}
+                    {m.credits && <CreditsEditor message={m} />}
                   </Bubble>
                   {SHOW_VIA && m.role === "assistant" && m.via && <p className="ml-2 mt-0.5 text-[10px] text-neutral-400">via {m.via}</p>}
                   {m.role === "user" && messages.indexOf(m) === lastUserIdx && (
@@ -176,6 +196,44 @@ export function BroddyChat() {
 
       {/* Composer */}
       <div className="shrink-0 border-t border-neutral-200 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:pb-3">
+        {uploadOpen && (
+          <div role="dialog" aria-label="Upload your credits screenshot" className="mb-2 animate-fade-up rounded-2xl border border-black bg-white p-3 text-[13px] shadow-lg">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-[15px] font-semibold">Upload your credits screenshot</p>
+              <button type="button" onClick={() => setUploadOpen(false)} className="-mr-1 -mt-1 flex size-8 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100" aria-label="Close">
+                <IconClose width={16} height={16} />
+              </button>
+            </div>
+            <p className="mt-1 text-neutral-600">
+              The graduation credit page from the student portal. I&apos;ll read required, earned and remaining credits, and you can fix them before
+              saving.
+            </p>
+            <p className="mt-2 rounded-lg bg-neutral-100 px-2.5 py-1.5 font-medium">Tip: Blur or crop your student ID before uploading.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => fileRef.current?.click()} className="h-10 rounded-full bg-black px-4 font-semibold text-white hover:bg-neutral-800">
+                Choose image
+              </button>
+              <button type="button" onClick={useDemoScreenshot} className="h-10 rounded-full border border-neutral-300 px-3.5 font-medium hover:border-black">
+                Try the demo screenshot
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] text-neutral-500">PNG or JPG, up to 5MB.</p>
+          </div>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/heic,image/heif"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (!f) return;
+            setUploadOpen(false);
+            stickToBottom.current = true;
+            void chatStore.uploadCredits(f);
+          }}
+        />
         {!pending && (
           <div className="-mx-3 mb-2 flex gap-1.5 overflow-x-auto px-3 pb-0.5 [scrollbar-width:none]">
             {SUGGESTIONS[page].map((s) => (
@@ -215,10 +273,12 @@ export function BroddyChat() {
         >
           <button
             type="button"
-            disabled
-            title="Credits screenshot upload is coming soon"
-            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-400"
-            aria-label="Attach a credits screenshot (coming soon)"
+            onClick={() => setUploadOpen((o) => !o)}
+            disabled={Boolean(pending)}
+            aria-expanded={uploadOpen}
+            title="Upload your credits screenshot"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-black transition-colors hover:bg-neutral-200 disabled:text-neutral-400"
+            aria-label="Attach a credits screenshot"
           >
             <IconPlus />
           </button>

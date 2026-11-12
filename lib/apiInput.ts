@@ -7,7 +7,18 @@ const num = (v: unknown, min: number, max: number) =>
 
 export function cleanProfile(v: unknown): Profile & { remainingCredits: number | null } {
   const p = (v ?? {}) as Record<string, unknown>;
+  const cr = (p.credits ?? null) as { categories?: unknown } | null;
+  const categories = Array.isArray(cr?.categories)
+    ? cr!.categories
+        .slice(0, 20)
+        .map((c) => {
+          const x = (c ?? {}) as Record<string, unknown>;
+          return { name: str(x.name, 60), required: num(x.required, 0, 300) ?? 0, earned: num(x.earned, 0, 300) ?? 0 };
+        })
+        .filter((c) => c.name)
+    : null;
   return {
+    credits: categories?.length ? { categories, confirmedAt: "" } : null,
     name: str(p.name, 60) || null,
     program: str(p.program, 80) || null,
     year: num(p.year, 1, 6),
