@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { myCoursesStore, toMyCourse } from "@/lib/myCoursesStore";
 import { clashesWith, describeClash, type Clash } from "@/lib/schedule";
+import { previewStore } from "@/lib/previewStore";
 import { showToast } from "@/lib/toast";
 import type { Course, Section } from "@/lib/types";
 
@@ -83,6 +84,14 @@ function SectionRow({ course, section: s, currentSection }: { course: Course; se
             <button
               type="button"
               onClick={() => add()}
+              onMouseEnter={() =>
+                previewStore.set({ courseId: course.id, name: course.name, section: s.section, room: s.room, slots: s.slots, professor: s.professor, credits: course.credits, scheduleText: s.schedule_text })
+              }
+              onMouseLeave={() => previewStore.set(null)}
+              onFocus={() =>
+                previewStore.set({ courseId: course.id, name: course.name, section: s.section, room: s.room, slots: s.slots, professor: s.professor, credits: course.credits, scheduleText: s.schedule_text })
+              }
+              onBlur={() => previewStore.set(null)}
               className="inline-flex h-11 items-center justify-center rounded-full bg-black px-4 text-sm font-semibold text-white transition-colors hover:bg-neutral-800 active:scale-[0.98]"
             >
               {otherAdded ? "Switch to this section" : "Add to My Courses"}

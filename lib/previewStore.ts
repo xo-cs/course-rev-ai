@@ -10,6 +10,9 @@ export interface PreviewSection {
   section: string;
   room: string;
   slots: Slot[];
+  professor?: string;
+  credits?: number | null;
+  scheduleText?: string;
 }
 
 export const previewStore = createMemoryStore<PreviewSection | null>(null);

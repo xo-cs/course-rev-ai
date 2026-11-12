@@ -41,3 +41,23 @@ export function toListItem(c: Course): CourseListItem {
     days: courseDays(c),
   };
 }
+
+export interface CourseSections {
+  name: string;
+  credits: number | null;
+  sections: { section: string; professor: string; room: string; schedule_text: string; slots: Course["sections"][number]["slots"]; remark: string }[];
+}
+
+/** Compact sections for every course (for section dropdowns on My Courses). */
+export function sectionIndex(): Record<string, CourseSections> {
+  return Object.fromEntries(
+    courses.map((c) => [
+      c.id,
+      {
+        name: c.name,
+        credits: c.credits,
+        sections: c.sections.map((s) => ({ section: s.section, professor: s.professor, room: s.room, schedule_text: s.schedule_text, slots: s.slots, remark: s.remark })),
+      },
+    ]),
+  );
+}

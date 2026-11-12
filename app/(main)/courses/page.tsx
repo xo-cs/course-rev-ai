@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { ComingSoon } from "@/components/ui/ComingSoon";
+import { MyCourses } from "@/components/courses/MyCourses";
+import { programs, sectionIndex } from "@/lib/catalog";
 
 export const metadata: Metadata = { title: "My Courses" };
 
 export default function MyCoursesPage() {
-  return <ComingSoon title="My Courses" text="Your semester plan will live here." />;
+  return <MyCourses index={sectionIndex()} programs={programs} />;
 }

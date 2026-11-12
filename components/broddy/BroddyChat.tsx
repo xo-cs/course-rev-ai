@@ -58,7 +58,7 @@ export function BroddyChat() {
   const context =
     dismissed === pathname
       ? null
-      : page === "course" && pageCourse
+      : pageCourse
         ? { label: pageCourse.label, courseId: pageCourse.courseId }
         : page === "courses"
           ? { label: "My Courses", courseId: null }

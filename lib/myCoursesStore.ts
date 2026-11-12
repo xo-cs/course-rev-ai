@@ -34,7 +34,13 @@ export const myCoursesStore = {
   getAll: () => store.get(),
   /** Adds the section, replacing another section of the same course if present. */
   add(entry: MyCourse) {
-    store.set((list) => [...list.filter((c) => c.courseId !== entry.courseId), entry]);
+    store.set((list) => {
+      const i = list.findIndex((c) => c.courseId === entry.courseId);
+      if (i === -1) return [...list, entry];
+      const next = [...list];
+      next[i] = entry; // switching section keeps the course in place
+      return next;
+    });
   },
   remove(courseId: string) {
     store.set((list) => list.filter((c) => c.courseId !== courseId));

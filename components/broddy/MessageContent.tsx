@@ -132,7 +132,17 @@ function AddChip({ course, sec }: { course: RefCourse; sec: RefSection }) {
   const added = mine.some((m) => m.courseId === course.id && m.section === sec.section);
   const otherSection = mine.find((m) => m.courseId === course.id && m.section !== sec.section);
   const clashes = clashesWith({ courseId: course.id, name: course.name, section: sec.section, slots: sec.slots }, mine);
-  const preview = () => previewStore.set({ courseId: course.id, name: course.name, section: sec.section, room: sec.room, slots: sec.slots });
+  const preview = () =>
+    previewStore.set({
+      courseId: course.id,
+      name: course.name,
+      section: sec.section,
+      room: sec.room,
+      slots: sec.slots,
+      professor: sec.professor,
+      credits: course.credits,
+      scheduleText: sec.scheduleText,
+    });
   const clear = () => previewStore.set(null);
 
   function add() {
