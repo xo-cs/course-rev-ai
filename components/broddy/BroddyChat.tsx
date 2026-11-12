@@ -7,6 +7,7 @@ import { BroddyAvatar, IconArrowUp, IconClose, IconPlus } from "@/components/ui/
 import { chatStore, type ChatMessage, type ChatPage, type PendingReply } from "@/lib/chatStore";
 import { broddyFocusStore, dismissedContextStore, pageCourseStore, uploadRequestStore } from "@/lib/pageContext";
 import { CreditsEditor } from "./CreditsEditor";
+import { PlanCards, PlanPicker } from "./PlanWidgets";
 import { profileStore } from "@/lib/profileStore";
 import { MessageContent } from "./MessageContent";
 
@@ -23,9 +24,9 @@ function pageOf(pathname: string): ChatPage {
 
 const SUGGESTIONS: Record<ChatPage, string[]> = {
   course: ["Is this course good for me?", "Summarize the reviews", "Compare with a similar course"],
-  reviews: ["Is this course good for me?", "Summarize the reviews", "Compare with a similar course"],
-  courses: ["Am I taking too many credits?", "What else should I take?"],
-  calendar: ["Do I have clashes?", "Find a course for my free Friday"],
+  reviews: ["Plan my semester", "Is this course good for me?", "Summarize the reviews"],
+  courses: ["Plan my semester", "Am I taking too many credits?", "What else should I take?"],
+  calendar: ["Plan my semester", "Do I have clashes?", "Find a course for my free Friday"],
   other: ["What does a Focus course mean?"],
 };
 
@@ -180,6 +181,8 @@ export function BroddyChat() {
                     )}
                     {m.role === "assistant" ? <MessageContent text={m.text} refs={m.refs ?? {}} secs={m.secs ?? {}} /> : <p className="whitespace-pre-wrap">{m.text}</p>}
                     {m.credits && <CreditsEditor message={m} />}
+                    {m.planPicker && <PlanPicker message={m} />}
+                    {m.plans && <PlanCards plans={m.plans} />}
                   </Bubble>
                   {SHOW_VIA && m.role === "assistant" && m.via && <p className="ml-2 mt-0.5 text-[10px] text-neutral-400">via {m.via}</p>}
                   {m.role === "user" && messages.indexOf(m) === lastUserIdx && (

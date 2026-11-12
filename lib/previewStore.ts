@@ -16,3 +16,6 @@ export interface PreviewSection {
 }
 
 export const previewStore = createMemoryStore<PreviewSection | null>(null);
+
+/** Sections of the plan card being hovered/tapped (dashed blocks on the calendar). */
+export const planPreviewStore = createMemoryStore<PreviewSection[]>([]);

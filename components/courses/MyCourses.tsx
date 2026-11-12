@@ -16,6 +16,7 @@ import { clashesWith, findAllClashes } from "@/lib/schedule";
 import { showToast } from "@/lib/toast";
 import { ClashBanner } from "@/components/calendar/ClashBanner";
 import { GraduationCard } from "./GraduationCard";
+import { PlanButton } from "./PlanButton";
 
 export function MyCourses({ index, programs }: { index: Record<string, CourseSections>; programs: string[] }) {
   const mine = myCoursesStore.useAll();
@@ -57,11 +58,14 @@ export function MyCourses({ index, programs }: { index: Record<string, CourseSec
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">My Courses</h1>
           <p className="mt-2 text-[15px] text-neutral-600">Your plan for the semester. Stored in this browser.</p>
         </div>
-        {mine.length > 0 && (
-          <Link href="/calendar" className="inline-flex h-11 items-center rounded-full border border-black px-5 text-sm font-semibold hover:bg-neutral-100">
-            View calendar
-          </Link>
-        )}
+        <div className="flex flex-wrap gap-2">
+          <PlanButton />
+          {mine.length > 0 && (
+            <Link href="/calendar" className="inline-flex h-11 items-center rounded-full border border-black px-5 text-sm font-semibold hover:bg-neutral-100">
+              View calendar
+            </Link>
+          )}
+        </div>
       </header>
 
       {mine.length === 0 ? (

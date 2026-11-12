@@ -8,7 +8,7 @@ import { chatStore } from "@/lib/chatStore";
 import { courseHref } from "@/lib/courseUtils";
 import { myCoursesStore, type MyCourse } from "@/lib/myCoursesStore";
 import { dismissedContextStore, pageCourseStore } from "@/lib/pageContext";
-import { previewStore, type PreviewSection } from "@/lib/previewStore";
+import { planPreviewStore, previewStore, type PreviewSection } from "@/lib/previewStore";
 import { findAllClashes, toMinutes } from "@/lib/schedule";
 import { showToast } from "@/lib/toast";
 import type { Day, Slot } from "@/lib/types";
@@ -75,6 +75,7 @@ const fmt = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:$
 export function WeekCalendar() {
   const mine = myCoursesStore.useAll();
   const hovered = previewStore.useValue();
+  const planPreview = planPreviewStore.useValue();
   const messages = chatStore.useMessages();
   const { openBroddy } = useShell();
   const todayIdx = useSyncExternalStore(noop, () => new Date().getDay(), () => -1);
@@ -101,13 +102,15 @@ export function WeekCalendar() {
         hovered: false,
       });
     }
+    // A hovered/tapped plan card replaces the other previews.
+    if (planPreview.length) return planPreview.map((g) => ({ ...g, hovered: true })).filter((g) => !mine.some((m) => m.courseId === g.courseId && m.section === g.section));
     if (hovered) {
       const existing = list.find((g) => g.courseId === hovered.courseId && g.section === hovered.section);
       if (existing) existing.hovered = true;
       else list.push({ ...hovered, hovered: true });
     }
     return list.filter((g) => !mine.some((m) => m.courseId === g.courseId && m.section === g.section));
-  }, [messages, hovered, mine]);
+  }, [messages, hovered, mine, planPreview]);
 
   const clashes = useMemo(() => findAllClashes(mine), [mine]);
 

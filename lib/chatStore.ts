@@ -9,6 +9,7 @@ import { profileStore } from "./profileStore";
 import { reviewsStore } from "./reviewsStore";
 import type { CreditCategory } from "./credits";
 import { ImageCheckError, prepareScreenshot } from "./imageUtils";
+import type { Plan, PlanPrefs } from "./planner";
 import type { ChatEvent, RefCourse, RefSection } from "./tokens";
 
 export interface ChatMessage {
@@ -24,6 +25,23 @@ export interface ChatMessage {
   image?: string;
   /** Extracted credits table, edited and confirmed in the bubble. */
   credits?: { categories: CreditCategory[]; status: "draft" | "saved" | "discarded" };
+  /** "Plan my semester": preference picker, then plan cards. */
+  planPicker?: Partial<PlanPrefs> & { done?: boolean };
+  plans?: Plan[];
+}
+
+/** Parses "Plan my semester, 15 credits, no Friday, balanced". */
+export function parsePlanRequest(text: string): Partial<PlanPrefs> | null {
+  if (!/plan (my|the|a)?\s*semester/i.test(text)) return null;
+  const out: Partial<PlanPrefs> = {};
+  const cr = text.match(/\b(12|15|18|21)\b/);
+  if (cr) out.credits = Number(cr[1]);
+  if (/no (mon|monday)|monday off|mon(day)? free/i.test(text)) out.dayOff = "Mon";
+  else if (/no (fri|friday)|friday off|fri(day)? free/i.test(text)) out.dayOff = "Fri";
+  else if (/no day off|any day|every day/i.test(text)) out.dayOff = "none";
+  const st = text.match(/\b(light|balanced|challenging)\b/i);
+  if (st) out.style = st[1].toLowerCase() as PlanPrefs["style"];
+  return out;
 }
 
 export interface PendingReply {
@@ -53,6 +71,40 @@ export const chatStore = {
 
   updateMessage(id: string, patch: Partial<ChatMessage>) {
     history.set((h) => h.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  },
+
+  /** Start "Plan my semester": Broddy asks 3 quick preferences (prefilled from free text). */
+  startPlanning(prefill: Partial<PlanPrefs> = {}) {
+    chatStore.say("Let's plan your semester! Pick three quick preferences and I'll build clash-free plans from the catalog.", { planPicker: prefill });
+  },
+
+  async buildPlans(prefs: PlanPrefs, opts: { echo?: boolean } = {}) {
+    if (pending.get()) return;
+    const day = prefs.dayOff === "none" ? "no day off" : `${prefs.dayOff === "Mon" ? "Mondays" : "Fridays"} off`;
+    if (opts.echo !== false)
+      history.set((h) => [...h, { id: uid(), role: "user" as const, text: `${prefs.credits} credits, ${day}, ${prefs.style}.`, at: Date.now() }].slice(-MAX_STORED));
+    pending.set({ text: "", refs: {}, secs: {} });
+    const profile = profileStore.get();
+    const exclude = [...myCoursesStore.getAll().map((m) => m.courseId), ...reviewsStore.getUserReviews().map((r) => r.courseId)];
+    try {
+      const res = await fetch("/api/plan", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ profile, prefs, exclude }),
+      });
+      const json = (await res.json()) as { ok: boolean; plans?: Plan[]; message?: string };
+      pending.set(null);
+      if (json.ok && json.plans?.length) {
+        const n = json.plans.length;
+        chatStore.say(
+          `Here ${n === 1 ? "is 1 plan" : `are ${n} plans`} with ${prefs.credits} credits, ${day}, all clash-free and built from the catalog. Hover or tap a plan to preview it on your calendar.`,
+          { plans: json.plans },
+        );
+      } else chatStore.say(json.message || "I couldn't build a plan with those preferences. Try fewer credits or no day off.", { error: true });
+    } catch {
+      pending.set(null);
+      chatStore.say("Something went wrong building plans. Try again in a moment.", { error: true });
+    }
   },
 
   /** Credits screenshot -> /api/extract-credits -> editable table bubble. */
@@ -98,6 +150,12 @@ export const chatStore = {
   async send(text: string, ctx: { page: ChatPage; courseId?: string | null }) {
     const clean = text.trim();
     if (!clean || pending.get()) return;
+    const plan = parsePlanRequest(clean);
+    if (plan) {
+      history.set((h) => [...h, { id: uid(), role: "user" as const, text: clean, at: Date.now() }].slice(-MAX_STORED));
+      if (plan.credits && plan.dayOff && plan.style) return chatStore.buildPlans(plan as PlanPrefs, { echo: false });
+      return chatStore.startPlanning(plan);
+    }
     const userMsg: ChatMessage = { id: uid(), role: "user", text: clean, at: Date.now() };
     history.set((h) => [...h, userMsg].slice(-MAX_STORED));
     pending.set({ text: "", refs: {}, secs: {} });

@@ -38,6 +38,7 @@ export function AppShell({ children, programs }: { children: ReactNode; programs
   const api = useMemo<ShellApi>(
     () => ({
       openProfile: () => setProfileOpen(true),
+      closeBroddySheet: () => setSheetOpen(false),
       openBroddy: () => {
         uiStore.set((s) => ({ ...s, broddyCollapsed: false }));
         if (window.matchMedia("(max-width: 1023.98px)").matches) setSheetOpen(true);
