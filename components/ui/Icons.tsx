@@ -116,3 +116,26 @@ export function BroddyAvatar({ size = 36, className = "" }: { size?: number; cla
     </span>
   );
 }
+
+export const IconExpand = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
+  </svg>
+);
+export const IconShrink = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M20 10h-6V4M4 14h6v6M14 10l7-7M10 14l-7 7" />
+  </svg>
+);
+export const IconPopOut = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="3.5" y="7.5" width="13" height="13" rx="2" />
+    <path d="M10 4h10v10M20 4l-9 9" />
+  </svg>
+);
+export const IconDock = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+    <path d="M14 4.5v15M17 9l-2 3 2 3" />
+  </svg>
+);

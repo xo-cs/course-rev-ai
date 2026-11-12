@@ -265,7 +265,7 @@ function Group({ role, children }: { role: ChatMessage["role"]; children: React.
   return (
     <div className={`mb-3 flex items-end gap-2 ${role === "user" ? "justify-end" : ""}`}>
       {role === "assistant" && <BroddyAvatar size={26} className="mb-0.5" />}
-      <div className={`flex min-w-0 max-w-[85%] flex-col gap-0.5 ${role === "user" ? "items-end" : "items-start"}`}>{children}</div>
+      <div className={`flex min-w-0 max-w-[min(85%,42rem)] flex-col gap-0.5 ${role === "user" ? "items-end" : "items-start"}`}>{children}</div>
     </div>
   );
 }
@@ -287,7 +287,7 @@ function PendingBubble({ pending }: { pending: PendingReply }) {
   return (
     <div className="mb-3 flex items-end gap-2">
       <BroddyAvatar size={26} className="mb-0.5" />
-      <div className="min-w-0 max-w-[85%]">
+      <div className="min-w-0 max-w-[min(85%,42rem)]">
         {pending.text ? (
           <div className="tail-bot relative rounded-[18px] bg-neutral-100 px-3.5 py-2 text-[15px] leading-[1.4]">
             <MessageContent text={pending.text} refs={pending.refs} secs={pending.secs} />

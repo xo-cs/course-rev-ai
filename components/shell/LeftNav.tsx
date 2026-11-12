@@ -18,9 +18,8 @@ export function LeftNav() {
   return (
     <nav
       aria-label="Main"
-      className={`hidden shrink-0 flex-col border-r border-neutral-200 bg-white transition-[width] duration-200 md:flex ${
-        collapsed ? "w-[68px]" : "w-60"
-      }`}
+      className="hidden min-w-0 shrink-0 flex-col overflow-hidden bg-white md:flex"
+      style={{ width: "var(--nav-w)" }}
     >
       <div className={`flex h-16 items-center ${collapsed ? "justify-center" : "justify-between pl-5 pr-3"}`}>
         {!collapsed && (
