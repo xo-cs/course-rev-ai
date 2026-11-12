@@ -82,7 +82,14 @@ export function LeftNav() {
             </span>
           )}
         </button>
-        {!collapsed && <p className="px-1 text-[11px] leading-snug text-neutral-500">Course data: Spring 2025 timetable</p>}
+        {!collapsed && (
+          <div className="flex items-center justify-between gap-2 px-1">
+            <p className="text-[11px] leading-snug text-neutral-500">Course data: Spring 2025 timetable</p>
+            <Link href="/admin" className="flex h-8 items-center text-[11px] font-medium text-neutral-500 underline underline-offset-2 hover:text-black">
+              Admin
+            </Link>
+          </div>
+        )}
       </div>
     </nav>
   );
