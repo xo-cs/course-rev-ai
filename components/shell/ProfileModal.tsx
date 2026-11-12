@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { profileStore } from "@/lib/profileStore";
@@ -10,6 +11,16 @@ export function ProfileModal({ open, onClose, programs }: { open: boolean; onClo
     <Modal open={open} onClose={onClose} title="Demo sign in">
       {/* Re-mount the form each time it opens so it starts from the saved profile. */}
       {open && <ProfileForm programs={programs} onDone={onClose} />}
+      {open && (
+        <nav aria-label="More" className="mt-6 flex gap-2 border-t border-neutral-200 pt-4">
+          <Link href="/qr" onClick={onClose} className="inline-flex h-11 flex-1 items-center justify-center rounded-full border border-black text-sm font-semibold hover:bg-neutral-100">
+            Share (QR code)
+          </Link>
+          <Link href="/admin" onClick={onClose} className="inline-flex h-11 flex-1 items-center justify-center rounded-full border border-neutral-300 text-sm font-medium hover:border-black">
+            Admin
+          </Link>
+        </nav>
+      )}
     </Modal>
   );
 }
