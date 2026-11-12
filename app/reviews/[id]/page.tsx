@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CourseDetail } from "@/components/course/CourseDetail";
-import { courses, getCourse, getSeedReviews } from "@/lib/catalog";
+import { courses, getCourse, getSeedReviews, programs } from "@/lib/catalog";
 import { decodeId } from "@/lib/courseUtils";
 
 export function generateStaticParams() {
@@ -16,5 +16,5 @@ export async function generateMetadata({ params }: PageProps<"/reviews/[id]">): 
 export default async function CoursePage({ params }: PageProps<"/reviews/[id]">) {
   const course = getCourse(decodeId((await params).id));
   if (!course) notFound();
-  return <CourseDetail course={course} seedReviews={getSeedReviews(course.id)} />;
+  return <CourseDetail course={course} seedReviews={getSeedReviews(course.id)} programs={programs} />;
 }

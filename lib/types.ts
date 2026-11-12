@@ -36,10 +36,25 @@ export interface Course {
   sections: Section[];
 }
 
+export interface Reviewer {
+  /** Real name. For anonymous reviews it is stripped before reaching students (see publicReview). */
+  name: string | null;
+  year: number | null;
+  program: string | null;
+}
+
+/** ok = passed AI check, pending = AI check failed/unavailable, hidden = hidden by admin. */
+export type ModerationStatus = "ok" | "pending" | "hidden";
+
 export interface Review {
   id: string;
   courseId: string;
+  reviewer: Reviewer;
+  anonymous: boolean;
+  /** Demo user id of the author (user-written reviews only). */
+  authorId?: string;
   professor: string;
+  section?: string;
   semester: string;
   rating: number; // "Quality"
   difficulty: number;
@@ -48,7 +63,9 @@ export interface Review {
   tags: string[];
   text: string;
   createdAt: string; // YYYY-MM-DD
+  updatedAt?: string;
   isSample?: boolean;
+  moderation?: ModerationStatus;
 }
 
 export type TypeGroup = "Basic" | "Core" | "Advanced" | "Focus" | "Track" | "GE" | "Major" | "Other";
@@ -77,6 +94,8 @@ export interface CourseListItem {
 }
 
 export interface Profile {
+  /** "Demo sign in": a display name, no password. Needed to post reviews. */
+  name: string | null;
   program: string | null;
   year: number | null;
 }

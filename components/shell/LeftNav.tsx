@@ -64,19 +64,21 @@ export function LeftNav() {
         <button
           type="button"
           onClick={openProfile}
-          title={collapsed ? profileLabel(profile) : undefined}
+          title={collapsed ? profile.name || profileLabel(profile) : undefined}
           className={`flex w-full items-center gap-3 rounded-xl border border-neutral-200 text-left transition-colors hover:border-black ${
             collapsed ? "justify-center p-2" : "p-2.5"
           }`}
-          aria-label={`Profile: ${profileLabel(profile)}. Click to edit`}
+          aria-label={profile.name ? `Signed in as ${profile.name}. Edit profile` : "Demo sign in"}
         >
           <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-neutral-100">
             <IconUser width={18} height={18} />
           </span>
           {!collapsed && (
             <span className="min-w-0">
-              <span className="block truncate text-sm font-medium">{profile.program ?? "Set your major"}</span>
-              <span className="block text-xs text-neutral-500">{profile.year ? `Year ${profile.year}` : "Click to edit"}</span>
+              <span className="block truncate text-sm font-medium">{profile.name || "Demo sign in"}</span>
+              <span className="block truncate text-xs text-neutral-500">
+                {profile.program || profile.year ? profileLabel(profile) : "Name, major and year"}
+              </span>
             </span>
           )}
         </button>

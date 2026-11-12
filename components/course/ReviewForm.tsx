@@ -1,24 +1,49 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { ProfileFields } from "@/components/shell/ProfileModal";
 import { Modal } from "@/components/ui/Modal";
-import { reviewsStore } from "@/lib/reviewsStore";
+import { profileStore } from "@/lib/profileStore";
+import { cleanProfessor, reviewerMeta } from "@/lib/reviewDisplay";
+import { reviewsStore, type ReviewInput } from "@/lib/reviewsStore";
 import { ALL_TAGS, MAX_REVIEW_CHARS, MAX_TAGS, MIN_REVIEW_CHARS, SEMESTERS } from "@/lib/tags";
 import { showToast } from "@/lib/toast";
+import type { Profile, Review } from "@/lib/types";
 
 export interface ReviewFormCourse {
   id: string;
   name: string;
-  professors: string[]; // from the sections
+  sections: { section: string; professor: string }[];
 }
 
-export function ReviewFormModal({ course, open, onClose }: { course: ReviewFormCourse; open: boolean; onClose: () => void }) {
+/** Hook point for AI moderation (Phase 3). Returns the moderation status to store. */
+export type ModerateFn = (input: ReviewInput) => Promise<
+  { status: "ok" | "pending" } | { status: "blocked"; reason: string; suggestion: string }
+>;
+
+const allowAll: ModerateFn = async () => ({ status: "ok" });
+
+export function ReviewFormModal({
+  course,
+  programs,
+  open,
+  onClose,
+  moderate = allowAll,
+}: {
+  course: ReviewFormCourse;
+  programs: string[];
+  open: boolean;
+  onClose: () => void;
+  moderate?: ModerateFn;
+}) {
   const formId = useId();
+  const existing = open ? reviewsStore.mine(course.id) : undefined;
+  const [busy, setBusy] = useState(false);
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title={`Rate ${course.name}`}
+      title={existing ? `Edit your review` : `Rate ${course.name}`}
       wide
       footer={
         <div className="flex justify-end gap-2">
@@ -28,35 +53,70 @@ export function ReviewFormModal({ course, open, onClose }: { course: ReviewFormC
           <button
             type="submit"
             form={formId}
-            className="h-11 flex-1 rounded-full bg-black px-6 text-[15px] font-medium text-white hover:bg-neutral-800 sm:flex-none"
+            disabled={busy}
+            className="h-11 flex-1 rounded-full bg-black px-6 text-[15px] font-medium text-white hover:bg-neutral-800 disabled:opacity-60 sm:flex-none"
           >
-            Post review
+            {busy ? "Checking…" : existing ? "Save changes" : "Post review"}
           </button>
         </div>
       }
     >
-      {open && <ReviewForm formId={formId} course={course} onDone={onClose} />}
+      {open && (
+        <ReviewForm
+          formId={formId}
+          course={course}
+          programs={programs}
+          existing={existing}
+          moderate={moderate}
+          setBusy={setBusy}
+          onDone={onClose}
+        />
+      )}
     </Modal>
   );
 }
 
-type Errors = Partial<Record<"rating" | "difficulty" | "workload" | "wouldRecommend" | "semester" | "text" | "tag", string>>;
+type Errors = Partial<Record<"name" | "rating" | "difficulty" | "workload" | "wouldRecommend" | "semester" | "text" | "tag", string>>;
 
-function ReviewForm({ formId, course, onDone }: { formId: string; course: ReviewFormCourse; onDone: () => void }) {
-  const [rating, setRating] = useState<number | null>(null);
-  const [difficulty, setDifficulty] = useState<number | null>(null);
-  const [workload, setWorkload] = useState<number | null>(null);
-  const [wouldRecommend, setWouldRecommend] = useState<boolean | null>(null);
-  const [professor, setProfessor] = useState(course.professors[0] ?? "");
-  const [semester, setSemester] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
+function ReviewForm({
+  formId,
+  course,
+  programs,
+  existing,
+  moderate,
+  setBusy,
+  onDone,
+}: {
+  formId: string;
+  course: ReviewFormCourse;
+  programs: string[];
+  existing?: Review;
+  moderate: ModerateFn;
+  setBusy: (b: boolean) => void;
+  onDone: () => void;
+}) {
+  const [identity, setIdentity] = useState<Profile>(() => profileStore.get());
+  const [editIdentity, setEditIdentity] = useState(() => !profileStore.get().name);
+  const [anonymous, setAnonymous] = useState(existing?.anonymous ?? false);
+  const [rating, setRating] = useState<number | null>(existing?.rating ?? null);
+  const [difficulty, setDifficulty] = useState<number | null>(existing?.difficulty ?? null);
+  const [workload, setWorkload] = useState<number | null>(existing?.workload ?? null);
+  const [wouldRecommend, setWouldRecommend] = useState<boolean | null>(existing?.wouldRecommend ?? null);
+  const [section, setSection] = useState(existing?.section ?? "");
+  const [professor, setProfessor] = useState(existing?.professor ?? "");
+  const [semester, setSemester] = useState(existing?.semester ?? "");
+  const [tags, setTags] = useState<string[]>(existing?.tags ?? []);
   const [customTag, setCustomTag] = useState("");
-  const [text, setText] = useState("");
+  const [text, setText] = useState(existing?.text ?? "");
   const [errors, setErrors] = useState<Errors>({});
+  const [blocked, setBlocked] = useState<{ reason: string; suggestion: string } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
+  const professors = [...new Set(course.sections.map((s) => s.professor.trim()).filter((p) => cleanProfessor(p)))];
+  const clear = (k: keyof Errors) => setErrors((e) => ({ ...e, [k]: undefined }));
+
   const toggleTag = (t: string) => {
-    setErrors((e) => ({ ...e, tag: undefined }));
+    clear("tag");
     setTags((list) => (list.includes(t) ? list.filter((x) => x !== t) : list.length >= MAX_TAGS ? list : [...list, t]));
   };
 
@@ -69,10 +129,12 @@ function ReviewForm({ formId, course, onDone }: { formId: string; course: Review
     setCustomTag("");
   };
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = text.trim();
+    const name = identity.name?.trim() ?? "";
     const errs: Errors = {};
+    if (!name) errs.name = "Enter your name to post (demo sign in).";
     if (!rating) errs.rating = "Rate the overall quality.";
     if (!difficulty) errs.difficulty = "Rate the difficulty.";
     if (!workload) errs.workload = "Rate the workload.";
@@ -81,13 +143,22 @@ function ReviewForm({ formId, course, onDone }: { formId: string; course: Review
     if (trimmed.length < MIN_REVIEW_CHARS) errs.text = `Write at least ${MIN_REVIEW_CHARS} characters (${trimmed.length} so far).`;
     setErrors(errs);
     if (Object.keys(errs).length) {
+      if (errs.name) setEditIdentity(true);
       // Move focus to the first problem so keyboard and screen reader users find it.
       requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
       return;
     }
-    reviewsStore.add({
+
+    // Demo sign in: save the identity used for this review.
+    const profile = { ...identity, name };
+    profileStore.set(profile);
+
+    const input: ReviewInput = {
       courseId: course.id,
+      reviewer: { name, year: profile.year, program: profile.program },
+      anonymous,
       professor: professor || "Not sure",
+      section: section || undefined,
       semester,
       rating: rating!,
       difficulty: difficulty!,
@@ -95,71 +166,134 @@ function ReviewForm({ formId, course, onDone }: { formId: string; course: Review
       wouldRecommend: wouldRecommend!,
       tags,
       text: trimmed.slice(0, MAX_REVIEW_CHARS),
-    });
+    };
+
+    setBusy(true);
+    const verdict = await moderate(input).catch(() => ({ status: "pending" as const }));
+    setBusy(false);
+    if (verdict.status === "blocked") {
+      setBlocked({ reason: verdict.reason, suggestion: verdict.suggestion });
+      requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>("#moderation-note")?.focus());
+      return;
+    }
+    reviewsStore.save(input, verdict.status);
     onDone();
-    showToast("Thanks! Your review is posted.");
+    showToast(
+      verdict.status === "pending"
+        ? "Posted. It will be double-checked shortly."
+        : existing
+          ? "Your review is updated."
+          : "Thanks! Your review is posted.",
+    );
   }
 
   return (
     <form id={formId} ref={formRef} onSubmit={submit} noValidate className="space-y-6">
-      <Scale
-        label="Quality"
-        low="Awful"
-        high="Awesome"
-        value={rating}
-        onChange={(v) => {
-          setRating(v);
-          setErrors((e) => ({ ...e, rating: undefined }));
-        }}
-        error={errors.rating}
-      />
-      <Scale
-        label="Difficulty"
-        low="Very easy"
-        high="Very hard"
-        value={difficulty}
-        onChange={(v) => {
-          setDifficulty(v);
-          setErrors((e) => ({ ...e, difficulty: undefined }));
-        }}
-        error={errors.difficulty}
-      />
-      <Scale
-        label="Workload"
-        low="Very light"
-        high="Very heavy"
-        value={workload}
-        onChange={(v) => {
-          setWorkload(v);
-          setErrors((e) => ({ ...e, workload: undefined }));
-        }}
-        error={errors.workload}
-      />
+      {blocked && (
+        <div id="moderation-note" tabIndex={-1} role="alert" className="rounded-xl border-2 border-black p-4 outline-none">
+          <p className="text-[15px] font-semibold">This review can&apos;t be posted yet</p>
+          <p className="mt-1 text-sm text-neutral-700">{blocked.reason}</p>
+          {blocked.suggestion && (
+            <>
+              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.06em] text-neutral-500">Suggested rewrite</p>
+              <p className="mt-1 rounded-lg bg-neutral-100 p-3 text-sm leading-relaxed">{blocked.suggestion}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setText(blocked.suggestion);
+                    setBlocked(null);
+                  }}
+                  className="h-11 rounded-full bg-black px-4 text-sm font-semibold text-white"
+                >
+                  Use this text
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setText(blocked.suggestion);
+                    setBlocked(null);
+                    requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>("textarea")?.focus());
+                  }}
+                  className="h-11 rounded-full border border-black px-4 text-sm font-semibold"
+                >
+                  Edit it first
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Identity */}
+      <section aria-label="Who is posting" className="rounded-xl border border-neutral-200 p-4">
+        {editIdentity ? (
+          <>
+            <p className="mb-3 text-sm text-neutral-600">
+              <strong className="text-black">Demo sign in.</strong> No password, stored in this browser.
+            </p>
+            <ProfileFields draft={identity} setDraft={(p) => { setIdentity(p); clear("name"); }} programs={programs} nameError={errors.name} />
+          </>
+        ) : (
+          <div className="flex items-center justify-between gap-3">
+            <p className="min-w-0 text-[15px]">
+              <span className="text-neutral-500">Posting as </span>
+              <strong>{identity.name}</strong>
+              {reviewerMeta({ reviewer: { name: identity.name, year: identity.year, program: identity.program } }) && (
+                <span className="text-neutral-500">
+                  {" "}
+                  · {reviewerMeta({ reviewer: { name: identity.name, year: identity.year, program: identity.program } })}
+                </span>
+              )}
+            </p>
+            <button
+              type="button"
+              onClick={() => setEditIdentity(true)}
+              className="h-11 shrink-0 rounded-full px-3 text-sm underline underline-offset-4 hover:no-underline"
+            >
+              Change
+            </button>
+          </div>
+        )}
+
+        <fieldset className="mt-4">
+          <legend className="mb-2 text-[15px] font-semibold">Show my review</legend>
+          <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Show my review">
+            <IdentityOption on={!anonymous} onClick={() => setAnonymous(false)} title="Post with my name">
+              Students see {identity.name?.trim() || "your name"}.
+            </IdentityOption>
+            <IdentityOption on={anonymous} onClick={() => setAnonymous(true)} title="Post anonymously">
+              Hidden from other students. The university can still see who wrote it, to prevent abuse.
+            </IdentityOption>
+          </div>
+        </fieldset>
+      </section>
+
+      <Scale label="Quality" low="Awful" high="Awesome" value={rating} onChange={(v) => { setRating(v); clear("rating"); }} error={errors.rating} />
+      <Scale label="Difficulty" low="Very easy" high="Very hard" value={difficulty} onChange={(v) => { setDifficulty(v); clear("difficulty"); }} error={errors.difficulty} />
+      <Scale label="Workload" low="Very light" high="Very heavy" value={workload} onChange={(v) => { setWorkload(v); clear("workload"); }} error={errors.workload} />
 
       <fieldset>
         <legend className="mb-2 text-[15px] font-semibold">Would take again</legend>
         <div className="grid max-w-xs grid-cols-2 gap-2" role="radiogroup" aria-label="Would take again">
-          {[
+          {([
             [true, "Yes"],
             [false, "No"],
-          ].map(([v, label], i) => {
+          ] as const).map(([v, label], i) => {
             const on = wouldRecommend === v;
             return (
               <button
-                key={label as string}
+                key={label}
                 type="button"
                 role="radio"
                 aria-checked={on}
                 aria-invalid={i === 0 && errors.wouldRecommend ? true : undefined}
-                onClick={() => {
-                  setWouldRecommend(v as boolean);
-                  setErrors((e) => ({ ...e, wouldRecommend: undefined }));
-                }}
+                onClick={() => { setWouldRecommend(v); clear("wouldRecommend"); }}
                 className={`h-11 rounded-xl border text-[15px] font-medium transition-colors ${
                   on ? "border-black bg-black text-white" : "border-neutral-300 hover:border-black"
                 }`}
               >
-                {label as string}
+                {label}
               </button>
             );
           })}
@@ -167,7 +301,27 @@ function ReviewForm({ formId, course, onDone }: { formId: string; course: Review
         <FieldError msg={errors.wouldRecommend} />
       </fieldset>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <label className="block">
+          <span className="mb-1.5 block text-[15px] font-semibold">Section</span>
+          <select
+            value={section}
+            onChange={(e) => {
+              setSection(e.target.value);
+              const p = course.sections.find((s) => s.section === e.target.value)?.professor.trim();
+              if (p && cleanProfessor(p)) setProfessor(p);
+            }}
+            className="h-12 w-full rounded-xl border border-neutral-300 bg-white px-3 text-base hover:border-black"
+          >
+            <option value="">Not sure</option>
+            {course.sections.map((s) => (
+              <option key={s.section} value={s.section}>
+                {s.section}
+                {cleanProfessor(s.professor) ? ` · ${cleanProfessor(s.professor)}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="block">
           <span className="mb-1.5 block text-[15px] font-semibold">Professor</span>
           <select
@@ -175,22 +329,19 @@ function ReviewForm({ formId, course, onDone }: { formId: string; course: Review
             onChange={(e) => setProfessor(e.target.value)}
             className="h-12 w-full rounded-xl border border-neutral-300 bg-white px-3 text-base hover:border-black"
           >
-            {course.professors.map((p) => (
+            <option value="">Not sure</option>
+            {professors.map((p) => (
               <option key={p} value={p}>
-                {p}
+                {cleanProfessor(p)}
               </option>
             ))}
-            <option value="Not sure">Not sure</option>
           </select>
         </label>
         <label className="block">
           <span className="mb-1.5 block text-[15px] font-semibold">Semester taken</span>
           <select
             value={semester}
-            onChange={(e) => {
-              setSemester(e.target.value);
-              setErrors((er) => ({ ...er, semester: undefined }));
-            }}
+            onChange={(e) => { setSemester(e.target.value); clear("semester"); }}
             aria-invalid={errors.semester ? true : undefined}
             className={`h-12 w-full rounded-xl border bg-white px-3 text-base hover:border-black ${
               errors.semester ? "border-black ring-2 ring-black" : "border-neutral-300"
@@ -263,7 +414,7 @@ function ReviewForm({ formId, course, onDone }: { formId: string; course: Review
           value={text}
           onChange={(e) => {
             setText(e.target.value);
-            if (errors.text && e.target.value.trim().length >= MIN_REVIEW_CHARS) setErrors((er) => ({ ...er, text: undefined }));
+            if (errors.text && e.target.value.trim().length >= MIN_REVIEW_CHARS) clear("text");
           }}
           maxLength={MAX_REVIEW_CHARS}
           rows={5}
@@ -274,9 +425,31 @@ function ReviewForm({ formId, course, onDone }: { formId: string; course: Review
           }`}
         />
         <FieldError msg={errors.text} />
-        <p className="mt-1.5 text-xs text-neutral-500">Be fair and specific. Reviews are stored in this browser for the demo.</p>
+        <p className="mt-1.5 text-xs text-neutral-500">
+          Be fair and specific: no insults, personal attacks or private info. Reviews are checked by AI before posting.
+        </p>
       </label>
     </form>
+  );
+}
+
+function IdentityOption({ on, onClick, title, children }: { on: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={on}
+      onClick={onClick}
+      className={`flex gap-3 rounded-xl border p-3 text-left transition-colors ${on ? "border-black ring-1 ring-black" : "border-neutral-300 hover:border-black"}`}
+    >
+      <span aria-hidden className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 ${on ? "border-black" : "border-neutral-400"}`}>
+        {on && <span className="size-2.5 rounded-full bg-black" />}
+      </span>
+      <span>
+        <span className="block text-[15px] font-semibold">{title}</span>
+        <span className="mt-0.5 block text-sm text-neutral-600">{children}</span>
+      </span>
+    </button>
   );
 }
 

@@ -138,6 +138,16 @@ Matches the "Course Name / Professor / Comments" part of the sketch.
 * **Rate this course** button opens the review form (modal): quality, difficulty, workload, would take again, professor (dropdown from the sections), semester, tags (pick from a list plus custom), text (minimum 30 characters). Validate input.
 * **Ask Broddy** button: focuses the Broddy panel with this course attached as context.
 
+### Reviewer identity, anonymity and moderation
+
+* **Demo sign in**: the profile holds name, year and program (no password, stored in `localStorage`, labelled "Demo sign in"). Posting a review needs a name.
+* Each review shows the reviewer on the first line ("Anonymous student" or the name, plus "Year 3 · AI & Big Data") and, smaller, "Took it with Prof. X · Section 002 · 2024 Fall". Never show the professor where the reviewer belongs.
+* The review form offers **Post with my name** or **Post anonymously**. Under the anonymous option: "Hidden from other students. The university can still see who wrote it, to prevent abuse." Anonymous names are stripped on the server before reviews reach students; admin always sees the real name with a "Posted anonymously" badge.
+* One review per student per course; posting again edits it.
+* Sample reviews have fictional international reviewers (about 60% anonymous) and varied texts (1 to 5 sentences, no repeated template within a course).
+* **AI moderation** (via `lib/llm.ts`): on posting, the review is checked against a short policy (no insults, personal attacks, hate, spam, or private info about people) and returns `{ allowed, reason, suggestion }`. If blocked, the student sees the reason and a suggested rewrite to accept or edit. If the LLM fails, the review is posted and marked "pending check".
+* A **Report** button on every review (reason picker). Report counts are shown to admin.
+
 ## Section 2: My Courses `/courses`
 
 The student's own course plan for the semester, stored in `localStorage` (`myCoursesStore`).
@@ -216,6 +226,8 @@ An admin view for the university to see how courses are doing.
   7. "Needs attention" table: courses with the lowest quality or quality dropping, with review count, top complaint tags and a link to the course.
   8. Top rated courses table.
   9. Professor table: professor, courses taught, average quality, reviews.
+* A **Reviews** tab: table of all reviews with reviewer name, "Posted anonymously" badge, course, quality, date, moderation status, report count, and Hide/Unhide actions. Hidden reviews disappear for students.
+* Charts stay aggregated: no reviewer names on charts.
 * **AI insights** card with a "Generate report" button. It sends the stats for the current filter plus the reviews of the 5 weakest courses to `lib/llm.ts` and returns: 3 key findings, the main complaints per weak course, and 3 suggested actions for the university. Cite numbers. Cache per filter combination.
 * **Export** button: download the current filtered stats as CSV.
 * A note on the page: reviews written by users are stored per browser for this demo, so the dashboard shows sample reviews plus reviews from this browser.

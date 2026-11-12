@@ -8,11 +8,18 @@ import { useShell } from "@/components/shell/ShellContext";
 import { BroddyAvatar, IconChevronDown, IconChevronLeft } from "@/components/ui/Icons";
 import { broddyContextStore } from "@/lib/broddyStore";
 import { formatCredits, formatYears } from "@/lib/courseUtils";
+import { initials, reviewerLabel, reviewerMeta, takenLine } from "@/lib/reviewDisplay";
 import { reviewsStore } from "@/lib/reviewsStore";
+import { getUserId } from "@/lib/profileStore";
 import { fmtAvg } from "@/lib/stats";
+import { showToast } from "@/lib/toast";
 import type { Course, Review } from "@/lib/types";
 import { ReviewFormModal } from "./ReviewForm";
 import { SectionsTable } from "./SectionsTable";
+
+function getUserIdSafe() {
+  return typeof window === "undefined" ? "" : getUserId();
+}
 
 /** Deterministic starting "helpful" count for sample reviews so the sort has something to show. */
 function sampleHelpfulBase(r: Review) {
@@ -22,17 +29,30 @@ function sampleHelpfulBase(r: Review) {
   return h % 9;
 }
 
-const isRealProf = (p: string) => p && !/^(tbd|choose)/i.test(p) && !/only|student|department/i.test(p);
-
-export function CourseDetail({ course, seedReviews }: { course: Course; seedReviews: Review[] }) {
+export function CourseDetail({
+  course,
+  seedReviews,
+  programs,
+  summary,
+}: {
+  course: Course;
+  seedReviews: Review[];
+  programs: string[];
+  summary?: React.ReactNode;
+}) {
   const { openBroddy } = useShell();
   const userReviews = reviewsStore.useUserReviews();
+  const hidden = reviewsStore.useHidden();
   const [formOpen, setFormOpen] = useState(false);
 
   const reviews = useMemo(
-    () => [...userReviews.filter((r) => r.courseId === course.id), ...seedReviews],
-    [userReviews, seedReviews, course.id],
+    () =>
+      [...userReviews.filter((r) => r.courseId === course.id), ...seedReviews].filter(
+        (r) => !hidden[r.id] && r.moderation !== "hidden",
+      ),
+    [userReviews, seedReviews, course.id, hidden],
   );
+  const hasMine = userReviews.some((r) => r.courseId === course.id && r.authorId === getUserIdSafe());
 
   const stats = useMemo(() => {
     const n = reviews.length;
@@ -51,11 +71,6 @@ export function CourseDetail({ course, seedReviews }: { course: Course; seedRevi
       topTags,
     };
   }, [reviews]);
-
-  const sectionProfs = useMemo(
-    () => [...new Set(course.sections.map((s) => s.professor.trim()).filter(isRealProf))],
-    [course.sections],
-  );
 
   // Remarks grouped by text: "Sections 001, 002: 2025 Freshman ONLY"
   const remarks = useMemo(() => {
@@ -153,7 +168,7 @@ export function CourseDetail({ course, seedReviews }: { course: Course; seedRevi
           onClick={() => setFormOpen(true)}
           className="h-12 whitespace-nowrap rounded-full bg-black px-3 text-sm font-semibold text-white transition-colors hover:bg-neutral-800 sm:px-6 sm:text-[15px]"
         >
-          Rate this course
+          {hasMine ? "Edit your review" : "Rate this course"}
         </button>
         <button
           type="button"
@@ -204,6 +219,8 @@ export function CourseDetail({ course, seedReviews }: { course: Course; seedRevi
         </div>
       )}
 
+      {summary}
+
       {/* Sections */}
       <section className="mt-10" aria-labelledby="sections-h">
         <h2 id="sections-h" className="mb-3 text-xl font-bold tracking-tight">
@@ -216,7 +233,8 @@ export function CourseDetail({ course, seedReviews }: { course: Course; seedRevi
       <ReviewList reviews={reviews} onWrite={() => setFormOpen(true)} />
 
       <ReviewFormModal
-        course={{ id: course.id, name: course.name, professors: sectionProfs }}
+        course={{ id: course.id, name: course.name, sections: course.sections }}
+        programs={programs}
         open={formOpen}
         onClose={() => setFormOpen(false)}
       />
@@ -306,6 +324,10 @@ function ReviewList({ reviews, onWrite }: { reviews: Review[]; onWrite: () => vo
 
 function ReviewCard({ review: r, helpfulCount, isMarked }: { review: Review; helpfulCount: number; isMarked: boolean }) {
   const date = new Date(r.createdAt + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  const mine = !r.isSample && r.authorId === getUserIdSafe();
+  const label = reviewerLabel(r);
+  const anon = label === "Anonymous student";
+  const meta = reviewerMeta(r);
   return (
     <li className="flex flex-col gap-4 py-6 sm:flex-row sm:gap-6">
       <div className="flex shrink-0 gap-3 sm:flex-col">
@@ -313,21 +335,39 @@ function ReviewCard({ review: r, helpfulCount, isMarked }: { review: Review; hel
         <MiniBox label="Difficulty" value={r.difficulty} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-          <span className="font-semibold">{r.professor}</span>
-          <span className="text-neutral-400" aria-hidden>
-            ·
+        {/* Line 1: who wrote it */}
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden
+            className={`flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+              anon ? "border border-dashed border-neutral-400 text-neutral-500" : "bg-neutral-900 text-white"
+            }`}
+          >
+            {anon ? "?" : initials(label)}
           </span>
-          <span className="text-neutral-600">{r.semester}</span>
-          <span className="ml-auto text-xs text-neutral-500">{date}</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[15px] leading-tight">
+              <span className="font-semibold">{label}</span>
+              {meta && <span className="text-neutral-500"> · {meta}</span>}
+            </p>
+            {/* Line 2: how they took it */}
+            <p className="mt-1 text-[13px] text-neutral-500">{takenLine(r)}</p>
+          </div>
+          <span className="shrink-0 pt-0.5 text-xs text-neutral-500">{date}</span>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-          {r.isSample ? (
+
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          {r.isSample && (
             <span className="inline-flex h-6 items-center rounded-md border border-dashed border-neutral-400 px-2 font-medium text-neutral-600">
               Sample review
             </span>
-          ) : (
-            <span className="inline-flex h-6 items-center rounded-md bg-black px-2 font-semibold text-white">Your review</span>
+          )}
+          {mine && <span className="inline-flex h-6 items-center rounded-md bg-black px-2 font-semibold text-white">Your review</span>}
+          {mine && r.anonymous && (
+            <span className="inline-flex h-6 items-center rounded-md border border-black px-2 font-medium">Posted anonymously</span>
+          )}
+          {r.moderation === "pending" && (
+            <span className="inline-flex h-6 items-center rounded-md border border-black px-2 font-medium">Pending check</span>
           )}
           <span className="inline-flex h-6 items-center rounded-md bg-neutral-100 px-2 font-medium">
             Would take again: {r.wouldRecommend ? "Yes" : "No"}
@@ -344,21 +384,72 @@ function ReviewCard({ review: r, helpfulCount, isMarked }: { review: Review; hel
             ))}
           </ul>
         )}
-        <button
-          type="button"
-          aria-pressed={isMarked}
-          onClick={() => reviewsStore.toggleHelpful(r.id)}
-          className={`-ml-1 mt-3 inline-flex h-11 items-center gap-2 rounded-full px-3 text-sm font-medium transition-colors ${
-            isMarked ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100 hover:text-black"
-          }`}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M7 10v11H4V10zM7 10l4-7a2.5 2.5 0 012.5 2.5V9h5.2a2 2 0 012 2.3l-1.3 7.5a2 2 0 01-2 1.7H7" />
-          </svg>
-          Helpful <span className="tabular-nums">{helpfulCount}</span>
-        </button>
+        <div className="-ml-1 mt-3 flex flex-wrap items-center gap-1">
+          <button
+            type="button"
+            aria-pressed={isMarked}
+            onClick={() => reviewsStore.toggleHelpful(r.id)}
+            className={`inline-flex h-11 items-center gap-2 rounded-full px-3 text-sm font-medium transition-colors ${
+              isMarked ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100 hover:text-black"
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M7 10v11H4V10zM7 10l4-7a2.5 2.5 0 012.5 2.5V9h5.2a2 2 0 012 2.3l-1.3 7.5a2 2 0 01-2 1.7H7" />
+            </svg>
+            Helpful <span className="tabular-nums">{helpfulCount}</span>
+          </button>
+          {!mine && <ReportButton reviewId={r.id} />}
+        </div>
       </div>
     </li>
+  );
+}
+
+const REPORT_REASONS = ["Insulting or a personal attack", "Hate or harassment", "Spam or off-topic", "Private information", "Other"];
+
+function ReportButton({ reviewId }: { reviewId: string }) {
+  const reported = reviewsStore.useReportedByMe()[reviewId];
+  const [open, setOpen] = useState(false);
+  if (reported) {
+    return <span className="inline-flex h-11 items-center px-3 text-sm text-neutral-500">Reported. Thanks</span>;
+  }
+  return (
+    <span className="relative">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-neutral-600 hover:bg-neutral-100 hover:text-black"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M5 21V4h11l-1.5 4L16 12H5" />
+        </svg>
+        Report
+      </button>
+      {open && (
+        <span
+          role="menu"
+          className="absolute bottom-full left-0 z-20 mb-1 w-64 animate-fade-up rounded-xl border border-black bg-white p-1 shadow-xl"
+        >
+          <span className="block px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-[0.06em] text-neutral-500">Why are you reporting?</span>
+          {REPORT_REASONS.map((reason) => (
+            <button
+              key={reason}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                reviewsStore.report(reviewId, reason);
+                setOpen(false);
+                showToast("Thanks, the university team will review it.");
+              }}
+              className="flex h-11 w-full items-center rounded-lg px-3 text-left text-sm hover:bg-neutral-100"
+            >
+              {reason}
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
   );
 }
 

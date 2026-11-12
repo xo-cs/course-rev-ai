@@ -2,6 +2,7 @@
 import coursesJson from "@/data/courses.json";
 import reviewsJson from "@/data/reviews.json";
 import { courseDays, typeGroup } from "./courseUtils";
+import { isVisibleToStudents, publicReview } from "./reviewDisplay";
 import type { Course, CourseListItem, Review } from "./types";
 
 export const courses = coursesJson as unknown as Course[];
@@ -13,8 +14,14 @@ export function getCourse(id: string) {
   return byId.get(id);
 }
 
+/** Student-facing seed reviews (anonymous names removed, hidden ones dropped). */
 export function getSeedReviews(courseId: string) {
-  return seedReviews.filter((r) => r.courseId === courseId);
+  return seedReviews.filter((r) => r.courseId === courseId && isVisibleToStudents(r)).map(publicReview);
+}
+
+/** Full seed reviews including anonymous reviewers' names. Admin only. */
+export function getSeedReviewsForAdmin() {
+  return seedReviews;
 }
 
 export const programs = [...new Set(courses.map((c) => c.program))].sort((a, b) => a.localeCompare(b));
